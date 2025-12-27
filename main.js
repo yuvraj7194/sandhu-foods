@@ -305,33 +305,36 @@ async function handleOrderSubmit(event) {
     const statusBtn = document.querySelector('.place-order-btn');
     const formData = new FormData(event.target);
 
-    // 1. DATA GATHERING (Using safer selectors)
-    // IMPORTANT: Make sure your HTML inputs have these IDs!
+   // 1. DATA GATHERING
     const customerName = document.getElementById('full-name') ? document.getElementById('full-name').value : "Customer";
-    const customerEmail = document.getElementById('email') ? document.getElementById('email').value : "No Email";
-    const street = document.getElementById('address') ? document.getElementById('address').value : "No Address";
-    const city = document.getElementById('city') ? document.getElementById('city').value : "";
-    const pincode = document.getElementById('zip') ? document.getElementById('zip').value : "N/A";
-    const phone = document.getElementById('phone') ? document.getElementById('phone').value : "N/A";
+const customerEmail = document.getElementById('email') ? document.getElementById('email').value : "No Email";
+const street = document.getElementById('address') ? document.getElementById('address').value : "No Address";
+const city = document.getElementById('city') ? document.getElementById('city').value : "";
+const pincode = document.getElementById('zip') ? document.getElementById('zip').value : "N/A";
+const phone = document.getElementById('phone') ? document.getElementById('phone').value : "N/A";
     
     const orderId = 'SF-' + Math.floor(Math.random() * 90000000);
-    const summaryString = cartItems.map(item => `${item.name} (x${item.quantity})`).join(", ");
     const finalTotalText = summaryTotal.textContent;
+
+    // --- ONLY ONE SUMMARY STRING NEEDED ---
+    // This creates a professional vertical list with bullet points and line breaks
+    const summaryString = cartItems.map(item => `• ${item.name} (x${item.quantity})`).join("<br>");
 
     const templateParams = {
         customer_name: customerName,
         customer_email: customerEmail, 
         customer_phone: phone,
         order_id: orderId,
-        order_summary: summaryString,
+        order_summary: summaryString, 
         total_price: finalTotalText,
         shipping_address: street,
         shipping_city: city,
         shipping_pincode: pincode
     };
 
+    // --- FORMSPREE DATA ---
     formData.append("Order_ID", orderId);
-    formData.append("Cart_Items", summaryString);
+    formData.append("Cart_Items", summaryString.replace(/<br>/g, "\n"));
     formData.append("Total", finalTotalText);
 
     statusBtn.disabled = true;
