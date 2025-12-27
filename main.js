@@ -404,14 +404,6 @@ function renderOrderHistory() {
                 <small>Date: ${order.date}</small><br>
                 <span>Total: ${formatPrice(order.total)}</span>
 
-                const downloadButtons = document.querySelectorAll('.download-receipt-btn');
-downloadButtons.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        const orderId = e.target.getAttribute('data-id');
-        downloadReceipt(orderId);
-    });
-});
-
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
                 <button class="download-receipt-btn" data-id="${order.id}" 
                     style="color: #222; background: #eee; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 4px 8px;">
@@ -419,12 +411,21 @@ downloadButtons.forEach(btn => {
                 </button>
 
                 <button class="cancel-order-btn" data-id="${order.id}" 
-                style="display: block; margin-top: 10px; color: #d9534f; background: none; border: 1px solid #d9534f; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 4px 8px;">
+                style="color: #d9534f; background: none; border: 1px solid #d9534f; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 4px 8px;">
                 Cancel Order
             </button>
             </div>
         `);
     });
+
+    const downloadButtons = document.querySelectorAll('.download-receipt-btn');
+    downloadButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const orderId = e.target.getAttribute('data-id');
+            downloadReceipt(orderId);
+        });
+    });
+
     const cancelButtons = document.querySelectorAll('.cancel-order-btn');
     cancelButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -442,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const storedOrders = localStorage.getItem('sandhu_orders');
     if (storedOrders) {
         savedOrdersList = JSON.parse(storedOrders);
+    }
     renderCartItems();
 
     if (menuToggle) menuToggle.addEventListener('click', () => mainNav.classList.toggle('open'));
