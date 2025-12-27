@@ -471,3 +471,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (shippingForm) shippingForm.addEventListener('submit', handleOrderSubmit);
 });
+// 1. Select the elements
+const accountBtn = document.getElementById('accountBtn');
+const accountMenu = document.getElementById('accountMenu');
+
+// 2. Toggle the menu when clicking the button
+accountBtn.addEventListener('click', function(event) {
+    event.stopPropagation(); // Prevents the click from closing the menu immediately
+    accountMenu.classList.toggle('show-menu');
+});
+
+// 3. Close the menu if the user clicks anywhere else on the page
+document.addEventListener('click', function(event) {
+    // If the click is NOT inside the menu or on the button, close it
+    if (!accountBtn.contains(event.target)) {
+        accountMenu.classList.remove('show-menu');
+    }
+});

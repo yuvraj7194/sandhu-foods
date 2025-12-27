@@ -1000,3 +1000,62 @@ body {
     pointer-events: none; /* This ensures the ghost image doesn't block clicks */
     transition: all 0.8s cubic-bezier(0.24, 1.22, 0.67, 1.01); /* This makes the "arc" motion */
 }
+/* Keeps Account and Menu aligned */
+.account-wrapper {
+    display: inline-block;
+    position: relative;
+}
+
+/* The Menu Box (Hidden by default) */
+.dropdown-content {
+    display: none;       /* Hidden */
+    position: absolute;  /* Floats over other elements */
+    top: 100%;           /* Right below the button */
+    right: 0;            /* Aligned to the right edge */
+    background-color: white;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+    border-radius: 6px;
+    z-index: 1000;
+    margin-top: 10px;
+    padding: 8px 0;
+}
+
+/* The links inside the menu */
+.dropdown-content a {
+    color: #333;
+    padding: 10px 15px;
+    text-decoration: none;
+    display: block;
+    font-size: 14px;
+}
+
+.dropdown-content a:hover {
+    background-color: #f8f9fa;
+}
+
+.logout-link {
+    color: #dc3545 !important; /* Makes logout red */
+}
+
+/* The class our JavaScript will toggle */
+.show-menu {
+    display: block !important;
+}
+/* This part handles mobile screens */
+@media (max-width: 600px) {
+    .utility-links {
+        gap: 10px; /* Reduces the 20px gap to 10px so things fit */
+    }
+
+    .icon-link {
+        font-size: 0.9em; /* Shrinks the text slightly from 1.1em */
+    }
+
+    /* This ensures the Account dropdown doesn't go off the right edge of the phone */
+    .dropdown-content {
+        right: 0; 
+        left: auto; 
+        min-width: 130px;
+    }
+}
