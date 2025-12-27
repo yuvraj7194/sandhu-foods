@@ -1,11 +1,15 @@
+// Part 1: Initializing your specific EmailJS account
+(function() {
+    emailjs.init("Sm4cgGfqz-6llr3dV"); 
+})();
+
 // =======================================================
 // CORE DATA MODEL
 // =======================================================
 let cartItems = []; 
 let cartItemCount = 0;
 let cartTotalPrice = 0;
-let savedOrder = null; 
-
+let savedOrdersList = JSON.parse(localStorage.getItem('sandhu_orders')) || [];
 // =======================================================
 // GLOBAL ELEMENT REFERENCES
 // =======================================================
@@ -15,8 +19,6 @@ const cartIcon = document.querySelector('a[href="#cart"]');
 const cartDrawer = document.getElementById('cart-drawer');
 const closeCartBtn = document.querySelector('.close-cart-btn');
 const buyNowBtn = document.querySelector('.buy-now-btn');
-const continueShoppingBtnCart = document.querySelector('#cart-drawer .continue-shopping-btn');
-
 const cartCountDisplay = document.querySelector('.utility-links a[href="#cart"]');
 const cartHeaderCount = document.querySelector('.cart-header h3');
 const cartListContainer = document.getElementById('cart-items-list');
@@ -61,8 +63,42 @@ function formatPrice(price) {
         style: 'currency',
         currency: 'INR',
         minimumFractionDigits: 0, 
-        maximumFractionDigits: 2
+        maximumFractionDigits: 0
     }).format(price);
+} // <--- I ADDED THIS MISSING BRACKET
+
+function saveOrdersToLocalStorage() {
+    localStorage.setItem('sandhu_orders', JSON.stringify(savedOrdersList));
+}
+
+function cancelOrder(orderId) {
+    if (confirm("Are you sure you want to cancel this order?")) {
+        savedOrdersList = savedOrdersList.filter(order => order.id !== orderId);
+        saveOrdersToLocalStorage();
+        renderOrderHistory();
+        showToast("Order cancelled successfully!");
+    }
+}
+
+function downloadReceipt(orderId) {
+    const order = savedOrdersList.find(o => o.id === orderId);
+    if (!order) return;
+
+    const receiptText = `
+    SANDHU FOODS - ORDER RECEIPT
+    ----------------------------
+    Order ID: ${order.id}
+    Date: ${order.date}
+    Total Paid: ${formatPrice(order.total)}
+    
+    Thank you for your purchase!
+    `;
+
+    const blob = new Blob([receiptText], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Receipt_${order.id}.txt`;
+    link.click();
 }
 
 function generateCartItemHTML(item) {
@@ -87,9 +123,9 @@ function updateCartSummary() {
     cartTotalPrice = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
     cartItemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
 
-    cartCountDisplay.textContent = `🛒 Cart (${cartItemCount})`;
-    cartHeaderCount.textContent = `Shopping Cart (${cartItemCount})`;
-    totalDisplay.textContent = formatPrice(cartTotalPrice);
+    if(cartCountDisplay) cartCountDisplay.textContent = `🛒 Cart (${cartItemCount})`;
+    if(cartHeaderCount) cartHeaderCount.textContent = `Shopping Cart (${cartItemCount})`;
+    if(totalDisplay) totalDisplay.textContent = formatPrice(cartTotalPrice);
 }
 
 function renderCartItems() {
@@ -104,6 +140,8 @@ function renderCartItems() {
     updateCartSummary();
 
     const shippingInfoDiv = document.querySelector('.shipping-info');
+    if(!shippingInfoDiv) return;
+
     const freeShippingThreshold = 500;
     if (cartTotalPrice >= freeShippingThreshold) {
         shippingInfoDiv.innerHTML = '🎉 **Your order qualifies for FREE Shipping!**';
@@ -114,11 +152,42 @@ function renderCartItems() {
         shippingInfoDiv.innerHTML = `Spend **${formatPrice(remainingAmount)}** more for **FREE Shipping!**`;
         shippingInfoDiv.style.backgroundColor = '#FFFBE6';
         shippingInfoDiv.style.color = '#B8860B';
-    } else {
-        shippingInfoDiv.innerHTML = 'Free shipping on orders over ₹499.';
-        shippingInfoDiv.style.backgroundColor = '#F0F0F0';
-        shippingInfoDiv.style.color = '#333';
     }
+}
+
+// --- NEW FUNCTIONS START HERE ---
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-popup';
+    toast.innerHTML = `<span>✔️</span> ${message}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 100);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+    }, 3000);
+}
+
+function animateFlyToCart(buttonElement) {
+    const cartBtn = document.querySelector('.cart-toggle-btn'); 
+    if (!cartBtn) return;
+    const btnRect = buttonElement.getBoundingClientRect();
+    const cartRect = cartBtn.getBoundingClientRect();
+    const flyer = document.createElement('div');
+    flyer.className = 'flying-item';
+    flyer.style.background = '#B8860B'; 
+    flyer.style.top = `${btnRect.top}px`;
+    flyer.style.left = `${btnRect.left}px`;
+    document.body.appendChild(flyer);
+    setTimeout(() => {
+        flyer.style.top = `${cartRect.top}px`;
+        flyer.style.left = `${cartRect.left}px`;
+        flyer.style.width = '10px';
+        flyer.style.height = '10px';
+        flyer.style.opacity = '0';
+    }, 50);
+    setTimeout(() => flyer.remove(), 800);
 }
 
 // =======================================================
@@ -228,57 +297,77 @@ function mirrorCartToCheckout() {
 }
 
 // =======================================================
-// FORMSPREE & ORDER COMPLETION
+// THE DOUBLE SUBMIT: FORMSPREE + EMAILJS
 // =======================================================
 
-async function handleFormspreeSubmit(event) {
+async function handleOrderSubmit(event) {
     event.preventDefault();
-    const status = document.querySelector('.place-order-btn');
+    const statusBtn = document.querySelector('.place-order-btn');
     const formData = new FormData(event.target);
 
-    // 1. Prepare Cart Data for Email
-    const orderDetails = cartItems.map(item => `${item.name} (x${item.quantity})`).join(', ');
-    formData.append("Order Details", orderDetails);
-    formData.append("Total Amount", summaryTotal.textContent);
+    // 1. DATA GATHERING (Using safer selectors)
+    // IMPORTANT: Make sure your HTML inputs have these IDs!
+    const customerName = document.getElementById('full-name') ? document.getElementById('full-name').value : "Customer";
+    const customerEmail = document.getElementById('email') ? document.getElementById('email').value : "No Email";
+    const street = document.getElementById('address') ? document.getElementById('address').value : "No Address";
+    const city = document.getElementById('city') ? document.getElementById('city').value : "";
+    const pincode = document.getElementById('zip') ? document.getElementById('zip').value : "N/A";
+    const phone = document.getElementById('phone') ? document.getElementById('phone').value : "N/A";
+    
+    const orderId = 'SF-' + Math.floor(Math.random() * 90000000);
+    const summaryString = cartItems.map(item => `${item.name} (x${item.quantity})`).join(", ");
+    const finalTotalText = summaryTotal.textContent;
 
-    status.disabled = true;
-    status.textContent = "Processing...";
+    const templateParams = {
+        customer_name: customerName,
+        customer_email: customerEmail, 
+        customer_phone: phone,
+        order_id: orderId,
+        order_summary: summaryString,
+        total_price: finalTotalText,
+        shipping_address: street,
+        shipping_city: city,
+        shipping_pincode: pincode
+    };
+
+    formData.append("Order_ID", orderId);
+    formData.append("Cart_Items", summaryString);
+    formData.append("Total", finalTotalText);
+
+    statusBtn.disabled = true;
+    statusBtn.textContent = "Processing...";
 
     try {
-        const response = await fetch(event.target.action, {
+        // --- A. Notify Owner (Formspree) ---
+        // Change YOUR_FORMSPREE_ID to your actual ID
+        await fetch('https://formspree.io/f/xnjavwya', {
             method: 'POST',
             body: formData,
             headers: { 'Accept': 'application/json' }
         });
 
-        if (response.ok) {
-            // 2. Success Logic
-            lastOrderItems = JSON.parse(JSON.stringify(cartItems));
-            lastOrderTotal = cartTotalPrice;
-            
-            savedOrder = {
-                id: 'SF-' + Math.floor(Math.random() * 90000000) + 10000000, 
-                date: new Date().toISOString(),
-                items: lastOrderItems,
-                total: lastOrderTotal,
-                status: 'Shipped'
-            };
+        // --- B. Notify Customer (EmailJS) ---
+        await emailjs.send('service_pzxfpm8', 'template_ssemdv5', templateParams);
 
-            renderConfirmationSummary();
-            toggleView('confirmation');
+        // --- C. UI Updates ---
+        lastOrderItems = JSON.parse(JSON.stringify(cartItems));
+        lastOrderTotal = cartTotalPrice;
+        const newOrder = { id: orderId, date: new Date().toLocaleString(), items: lastOrderItems, total: lastOrderTotal };
+        savedOrdersList.push(newOrder); 
+        saveOrdersToLocalStorage();
 
-            // 3. Reset Cart
-            cartItems = [];
-            renderCartItems(); 
-            shippingForm.reset();
-        } else {
-            alert("Oops! There was a problem submitting your order.");
-        }
+        renderConfirmationSummary();
+        toggleView('confirmation');
+        cartItems = [];
+        renderCartItems();
+        shippingForm.reset();
+
     } catch (error) {
-        alert("Error connecting to server. Please try again.");
+        console.error("Error:", error);
+        alert("There was a problem placing your order. Check console for details.");
     } finally {
-        status.disabled = false;
-        status.textContent = "Place Order";
+        statusBtn.disabled = false;
+        statusBtn.textContent = "Place Order";
     }
 }
 
@@ -300,12 +389,49 @@ function renderConfirmationSummary() {
 
 function renderOrderHistory() {
     orderHistoryList.innerHTML = ''; 
-    if (!savedOrder) {
+    
+    // Check if we have any orders
+    if (savedOrdersList.length === 0) {
         orderHistoryList.innerHTML = `<div class="order-placeholder"><p>No orders yet!</p></div>`;
         return;
     }
-    // (Simplified history display logic)
-    orderHistoryList.innerHTML = `<div class="single-order-card"><strong>ID: ${savedOrder.id}</strong><br>Total: ${formatPrice(savedOrder.total)}</div>`;
+
+    // Loop through every order and display it
+    savedOrdersList.forEach(order => {
+        orderHistoryList.insertAdjacentHTML('beforeend', `
+            <div class="single-order-card" style="padding: 15px; margin-bottom: 10px;border: 1px solid #ddd; position: relative;">
+                <strong>Order ID: ${order.id}</strong><br>
+                <small>Date: ${order.date}</small><br>
+                <span>Total: ${formatPrice(order.total)}</span>
+
+                const downloadButtons = document.querySelectorAll('.download-receipt-btn');
+downloadButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const orderId = e.target.getAttribute('data-id');
+        downloadReceipt(orderId);
+    });
+});
+
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="download-receipt-btn" data-id="${order.id}" 
+                    style="color: #222; background: #eee; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 4px 8px;">
+                    Download Receipt
+                </button>
+
+                <button class="cancel-order-btn" data-id="${order.id}" 
+                style="display: block; margin-top: 10px; color: #d9534f; background: none; border: 1px solid #d9534f; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 4px 8px;">
+                Cancel Order
+            </button>
+            </div>
+        `);
+    });
+    const cancelButtons = document.querySelectorAll('.cancel-order-btn');
+    cancelButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const orderId = e.target.getAttribute('data-id');
+            cancelOrder(orderId);
+        });
+    });
 }
 
 // =======================================================
@@ -313,6 +439,9 @@ function renderOrderHistory() {
 // =======================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    const storedOrders = localStorage.getItem('sandhu_orders');
+    if (storedOrders) {
+        savedOrdersList = JSON.parse(storedOrders);
     renderCartItems();
 
     if (menuToggle) menuToggle.addEventListener('click', () => mainNav.classList.toggle('open'));
@@ -329,12 +458,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (action) handleQuantityChange(parseInt(e.target.closest('.cart-item').dataset.id), action);
     });
 
-    buyNowBtn.addEventListener('click', (e) => { e.preventDefault(); toggleView('checkout'); });
-    backToCartLink.addEventListener('click', (e) => { e.preventDefault(); toggleView('main'); toggleCart(); });
-    returnToShopBtn.addEventListener('click', () => toggleView('main'));
-    yourOrdersLink.addEventListener('click', () => toggleView('orders'));
-    backToShopOrdersBtn.addEventListener('click', () => toggleView('main'));
+    if (buyNowBtn) buyNowBtn.addEventListener('click', (e) => { e.preventDefault(); toggleView('checkout'); });
+    if (backToCartLink) backToCartLink.addEventListener('click', (e) => { e.preventDefault(); toggleView('main'); toggleCart(); });
+    if (returnToShopBtn) returnToShopBtn.addEventListener('click', () => toggleView('main'));
+    if (yourOrdersLink) yourOrdersLink.addEventListener('click', () => toggleView('orders'));
+    if (backToShopOrdersBtn) backToShopOrdersBtn.addEventListener('click', () => toggleView('main'));
 
-    // ATTACH THE NEW FORMSPREE HANDLER
-    if (shippingForm) shippingForm.addEventListener('submit', handleFormspreeSubmit);
+    if (shippingForm) shippingForm.addEventListener('submit', handleOrderSubmit);
 });
