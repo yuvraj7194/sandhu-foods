@@ -30,6 +30,8 @@ const checkoutPage = document.getElementById('checkout-page');
 const confirmationPage = document.getElementById('confirmation-page');
 const ordersHistoryPage = document.getElementById('orders-history-page');
 const allViews = [checkoutPage, confirmationPage, ordersHistoryPage];
+const heroSection = document.getElementById("new-hero-section");
+
 
 // Checkout / Form
 const shippingForm = document.getElementById('shipping-form');
@@ -54,6 +56,16 @@ const yourOrdersLink = document.querySelector('a[href="#orders"]');
 const orderHistoryList = document.getElementById('order-history-list');
 const backToShopOrdersBtn = document.getElementById('back-to-shop-orders');
 
+// Modal / Auth
+const accountBtn = document.getElementById('accountBtn');
+const modalOverlay = document.getElementById('modalOverlay');
+const closeModalBtn = document.getElementById('closeModal');
+const loginTab = document.getElementById('login-tab');
+const signupTab = document.getElementById('signup-tab');
+const loginForm = document.getElementById('loginForm');
+const signupForm = document.getElementById('signupForm');
+const logoutBtn = document.getElementById('logoutBtn');
+
 // =======================================================
 // HELPER FUNCTIONS
 // =======================================================
@@ -72,34 +84,131 @@ function saveOrdersToLocalStorage() {
 }
 
 function cancelOrder(orderId) {
-    if (confirm("Are you sure you want to cancel this order?")) {
-        savedOrdersList = savedOrdersList.filter(order => order.id !== orderId);
-        saveOrdersToLocalStorage();
-        renderOrderHistory();
-        showToast("Order cancelled successfully!");
-    }
+    if (!confirm("Are you sure you want to cancel this order?")) return;
+
+    const order = savedOrdersList.find(o => o.id === orderId);
+    if (!order) return;
+    order.orderStatus = "Cancelled";
+
+const orderSummary = order.items
+    .map(item => `${item.name} (x${item.quantity})`)
+    .join(", ");
+
+    // ---------- A. ADMIN EMAIL (FORMSPREE) ----------
+    const formData = new FormData();
+    formData.append("Order ID", order.id);
+    formData.append("Customer Name", order.customerName);
+    formData.append("Customer Email", order.customerEmail);
+    formData.append("Total Amount", formatPrice(order.total));
+    formData.append("Status", "Order Cancelled");
+    formData.append("Cancelled Items", orderSummary);
+
+
+    fetch("https://formspree.io/f/xnjavwya", {
+        method: "POST",
+        body: formData,
+        headers: { "Accept": "application/json" }
+    });
+
+    // ---------- B. CUSTOMER EMAIL (EMAILJS) ----------
+    emailjs.send("service_pzxfpm8", "template_8qoa8mo", {
+        customer_name: order.customerName,
+        customer_email: order.customerEmail,
+        order_id: order.id,
+        order_summary: orderSummary,
+        total_price: formatPrice(order.total),
+        message: "Your order has been successfully cancelled."
+    });
+
+    // ---------- C. UPDATE ORDER STATUS  ----------
+    saveOrdersToLocalStorage();
+    renderOrderHistory();
+    showToast("Order cancelled and email sent.");
+
 }
 
 function downloadReceipt(orderId) {
     const order = savedOrdersList.find(o => o.id === orderId);
     if (!order) return;
 
-    const receiptText = `
-    SANDHU FOODS - ORDER RECEIPT
-    ----------------------------
-    Order ID: ${order.id}
-    Date: ${order.date}
-    Total Paid: ${formatPrice(order.total)}
-    
-    Thank you for your purchase!
+    const itemsHTML = order.items
+        .map(item => `<li>${item.name} (x${item.quantity})</li>`)
+        .join("");
+
+    const receiptHTML = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Receipt ${order.id}</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background: #f5f5f5;
+                    padding: 40px;
+                }
+                .receipt {
+                    max-width: 600px;
+                    margin: auto;
+                    background: #fff;
+                    padding: 30px;
+                    border-radius: 8px;
+                    border: 1px solid #ddd;
+                }
+                h1 {
+                    text-align: center;
+                    color: #B8860B;
+                }
+                .status {
+                    text-align: center;
+                    font-weight: bold;
+                    color: ${order.orderStatus === "Cancelled" ? "#d9534f" : "#108040"};
+                }
+                ul {
+                    padding-left: 20px;
+                }
+                hr {
+                    margin: 20px 0;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="receipt">
+                <h1>SANDHU FOODS</h1>
+                <p class="status">${order.orderStatus}</p>
+
+                <p><strong>Order ID:</strong> ${order.id}</p>
+                <p><strong>Date:</strong> ${order.date}</p>
+                <p><strong>Customer:</strong> ${order.customerName}</p>
+
+                <hr>
+
+                <p><strong>Payment Method:</strong> ${order.paymentMethod}</p>
+                <p><strong>Payment Status:</strong> ${order.paymentStatus}</p>
+                <p><strong>Total:</strong> ${formatPrice(order.total)}</p>
+
+                <hr>
+
+                <p><strong>Items:</strong></p>
+                <ul>${itemsHTML}</ul>
+
+                <hr>
+
+                <p style="text-align:center; font-size:12px;">
+                    Thank you for choosing Sandhu Foods
+                </p>
+            </div>
+        </body>
+        </html>
     `;
 
-    const blob = new Blob([receiptText], { type: 'text/plain' });
-    const link = document.createElement('a');
+    const blob = new Blob([receiptHTML], { type: "text/html" });
+    const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Receipt_${order.id}.txt`;
+    link.download = `Receipt_${order.id}.html`;
     link.click();
 }
+
 
 function generateCartItemHTML(item) {
     return `
@@ -117,6 +226,78 @@ function generateCartItemHTML(item) {
             </div>
         </div>
     `;
+}
+
+// =======================================================
+// MODAL / AUTH FUNCTIONS
+// =======================================================
+
+function toggleModal() {
+    modalOverlay.style.display = modalOverlay.style.display === 'flex' ? 'none' : 'flex';
+}
+
+function switchTab(tab) {
+    if (tab === 'login') {
+        loginTab.classList.add('active');
+        signupTab.classList.remove('active');
+        loginForm.style.display = 'block';
+        signupForm.style.display = 'none';
+    } else {
+        signupTab.classList.add('active');
+        loginTab.classList.remove('active');
+        signupForm.style.display = 'block';
+        loginForm.style.display = 'none';
+    }
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    try {
+        await window.signInWithEmailAndPassword(window.auth, email, password);
+        showToast('Login successful!');
+        toggleModal();
+    } catch (error) {
+        showToast('Login failed: ' + error.message);
+    }
+}
+
+async function handleSignup(e) {
+    e.preventDefault();
+    const name = document.getElementById('signupName').value;
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+    try {
+        const userCredential = await window.createUserWithEmailAndPassword(window.auth, email, password);
+        await userCredential.user.updateProfile({ displayName: name });
+        showToast('Account created successfully!');
+        toggleModal();
+    } catch (error) {
+        showToast('Signup failed: ' + error.message);
+    }
+}
+
+function handleLogout() {
+    window.signOut(window.auth).then(() => {
+        showToast('Logged out successfully!');
+        toggleModal();
+    });
+}
+
+function updateAuthUI(user) {
+    const profileSection = document.getElementById('profile-section');
+    const authSection = document.getElementById('auth-section');
+    if (user) {
+        document.getElementById('profileGreeting').textContent = `Welcome, ${user.displayName || 'User'}!`;
+        document.getElementById('profileName').textContent = user.displayName || 'N/A';
+        document.getElementById('profileEmail').textContent = user.email;
+        profileSection.style.display = 'block';
+        authSection.style.display = 'none';
+    } else {
+        profileSection.style.display = 'none';
+        authSection.style.display = 'block';
+    }
 }
 
 function updateCartSummary() {
@@ -154,6 +335,8 @@ function renderCartItems() {
         shippingInfoDiv.style.color = '#B8860B';
     }
 }
+
+
 
 // --- NEW FUNCTIONS START HERE ---
 
@@ -195,22 +378,37 @@ function animateFlyToCart(buttonElement) {
 // =======================================================
 
 function toggleView(view) {
+    // Hide everything first
     mainPageSections.forEach(el => el.style.display = 'none');
     allViews.forEach(el => el.style.display = 'none');
-    window.scrollTo(0, 0); 
-    
+
+    // Hide hero by default
+    const heroSection = document.getElementById("new-hero-section");
+    if (heroSection) heroSection.style.display = "none";
+
+    window.scrollTo(0, 0);
+
+    if (view === 'main') {
+        // Home page → show hero + main content
+        if (heroSection) heroSection.style.display = "block";
+        mainPageSections.forEach(el => el.style.display = '');
+    }
+
     if (view === 'checkout') {
         checkoutPage.style.display = 'block';
         mirrorCartToCheckout();
-    } else if (view === 'confirmation') {
-        confirmationPage.style.display = 'flex'; 
-    } else if (view === 'orders') { 
+    }
+
+    if (view === 'confirmation') {
+        confirmationPage.style.display = 'flex';
+    }
+
+    if (view === 'orders') {
         ordersHistoryPage.style.display = 'block';
-        renderOrderHistory(); 
-    } else if (view === 'main') {
-        mainPageSections.forEach(el => el.style.display = '');
+        renderOrderHistory();
     }
 }
+
 
 function toggleCart() {
     cartDrawer.classList.toggle('open');
@@ -304,37 +502,36 @@ async function handleOrderSubmit(event) {
     event.preventDefault();
     const statusBtn = document.querySelector('.place-order-btn');
     const formData = new FormData(event.target);
+    const paymentMethod = formData.get("Payment Method");
+const paymentStatus = paymentMethod === "Online" ? "Paid" : "Not Paid (COD)";
 
-   // 1. DATA GATHERING
+    // 1. DATA GATHERING (Using safer selectors)
+    // IMPORTANT: Make sure your HTML inputs have these IDs!
     const customerName = document.getElementById('full-name') ? document.getElementById('full-name').value : "Customer";
-const customerEmail = document.getElementById('email') ? document.getElementById('email').value : "No Email";
-const street = document.getElementById('address') ? document.getElementById('address').value : "No Address";
-const city = document.getElementById('city') ? document.getElementById('city').value : "";
-const pincode = document.getElementById('zip') ? document.getElementById('zip').value : "N/A";
-const phone = document.getElementById('phone') ? document.getElementById('phone').value : "N/A";
+    const customerEmail = document.getElementById('email') ? document.getElementById('email').value : "No Email";
+    const street = document.getElementById('address') ? document.getElementById('address').value : "No Address";
+    const city = document.getElementById('city') ? document.getElementById('city').value : "";
+    const pincode = document.getElementById('zip') ? document.getElementById('zip').value : "N/A";
+    const phone = document.getElementById('phone') ? document.getElementById('phone').value : "N/A";
     
     const orderId = 'SF-' + Math.floor(Math.random() * 90000000);
+    const summaryString = cartItems.map(item => `${item.name} (x${item.quantity})`).join(", ");
     const finalTotalText = summaryTotal.textContent;
-
-    // --- ONLY ONE SUMMARY STRING NEEDED ---
-    // This creates a professional vertical list with bullet points and line breaks
-    const summaryString = cartItems.map(item => `• ${item.name} (x${item.quantity})`).join("<br>");
 
     const templateParams = {
         customer_name: customerName,
         customer_email: customerEmail, 
         customer_phone: phone,
         order_id: orderId,
-        order_summary: summaryString, 
+        order_summary: summaryString,
         total_price: finalTotalText,
         shipping_address: street,
         shipping_city: city,
         shipping_pincode: pincode
     };
 
-    // --- FORMSPREE DATA ---
     formData.append("Order_ID", orderId);
-    formData.append("Cart_Items", summaryString.replace(/<br>/g, "\n"));
+    formData.append("Cart_Items", summaryString);
     formData.append("Total", finalTotalText);
 
     statusBtn.disabled = true;
@@ -355,7 +552,18 @@ const phone = document.getElementById('phone') ? document.getElementById('phone'
         // --- C. UI Updates ---
         lastOrderItems = JSON.parse(JSON.stringify(cartItems));
         lastOrderTotal = cartTotalPrice;
-        const newOrder = { id: orderId, date: new Date().toLocaleString(), items: lastOrderItems, total: lastOrderTotal };
+        const newOrder = {
+    id: orderId,
+    date: new Date().toLocaleString(),
+    items: lastOrderItems,
+    total: lastOrderTotal,
+    customerEmail: customerEmail,
+    customerName: customerName,
+    paymentMethod: paymentMethod,
+    paymentStatus: paymentStatus,
+    orderStatus: "Placed"
+};
+
         savedOrdersList.push(newOrder); 
         saveOrdersToLocalStorage();
 
@@ -391,49 +599,96 @@ function renderConfirmationSummary() {
 }
 
 function renderOrderHistory() {
-    orderHistoryList.innerHTML = ''; 
-    
-    // Check if we have any orders
+    orderHistoryList.innerHTML = '';
+
     if (savedOrdersList.length === 0) {
-        orderHistoryList.innerHTML = `<div class="order-placeholder"><p>No orders yet!</p></div>`;
+        orderHistoryList.innerHTML = `
+            <div class="order-placeholder">
+                <p>No orders yet!</p>
+            </div>
+        `;
         return;
     }
 
-    // Loop through every order and display it
+    // 1. Render orders
     savedOrdersList.forEach(order => {
         orderHistoryList.insertAdjacentHTML('beforeend', `
-            <div class="single-order-card" style="padding: 15px; margin-bottom: 10px;border: 1px solid #ddd; position: relative;">
-                <strong>Order ID: ${order.id}</strong><br>
-                <small>Date: ${order.date}</small><br>
-                <span>Total: ${formatPrice(order.total)}</span>
+            <div style="
+                background:#fff;
+                border:1px solid #e5e5e5;
+                border-radius:8px;
+                padding:25px;
+                margin-bottom:25px;
+                max-width:700px;
+            ">
 
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="download-receipt-btn" data-id="${order.id}" 
-                    style="color: #222; background: #eee; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 4px 8px;">
-                    Download Receipt
-                </button>
+                <h4 style="margin-top:0;">
+                    Order ID: ${order.id}
+                </h4>
 
-                <button class="cancel-order-btn" data-id="${order.id}" 
-                style="color: #d9534f; background: none; border: 1px solid #d9534f; border-radius: 4px; cursor: pointer; font-size: 0.8em; padding: 4px 8px;">
-                Cancel Order
-            </button>
+                <p style="
+                    font-weight:600;
+                    color:${order.orderStatus === "Cancelled" ? "#d9534f" : "#108040"};
+                    margin-top:5px;
+                ">
+                    ${order.orderStatus}
+                </p>
+
+                <p><strong>Payment Method:</strong> ${order.paymentMethod}</p>
+                <p><strong>Payment Status:</strong> ${order.paymentStatus}</p>
+                <p><strong>Total:</strong> ${formatPrice(order.total)}</p>
+
+                <hr style="margin:15px 0;">
+
+                <p style="font-weight:600;">Items:</p>
+                <ul style="padding-left:18px;">
+                    ${order.items.map(item =>
+                        `<li>${item.name} (x${item.quantity})</li>`
+                    ).join("")}
+                </ul>
+
+                <div style="margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;">
+
+                    <button class="download-receipt-btn" data-id="${order.id}"
+                        style="
+                            background:#eee;
+                            border:1px solid #ccc;
+                            padding:6px 12px;
+                            border-radius:4px;
+                            cursor:pointer;
+                        ">
+                        Download Receipt
+                    </button>
+
+                    ${order.orderStatus === "Cancelled" ? "" : `
+                        <button class="cancel-order-btn" data-id="${order.id}"
+                            style="
+                                background:none;
+                                border:1px solid #d9534f;
+                                color:#d9534f;
+                                padding:6px 12px;
+                                border-radius:4px;
+                                cursor:pointer;
+                            ">
+                            Cancel Order
+                        </button>
+                    `}
+                </div>
+
             </div>
         `);
     });
 
-    const downloadButtons = document.querySelectorAll('.download-receipt-btn');
-    downloadButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const orderId = e.target.getAttribute('data-id');
-            downloadReceipt(orderId);
+    // 2. Attach button listeners AFTER render
+    document.querySelectorAll('.download-receipt-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            downloadReceipt(e.target.dataset.id);
         });
     });
 
-    const cancelButtons = document.querySelectorAll('.cancel-order-btn');
-    cancelButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const orderId = e.target.getAttribute('data-id');
-            cancelOrder(orderId);
+    document.querySelectorAll('.cancel-order-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+            cancelOrder(e.target.dataset.id);
         });
     });
 }
@@ -442,49 +697,56 @@ function renderOrderHistory() {
 // INITIALIZATION
 // =======================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-    const storedOrders = localStorage.getItem('sandhu_orders');
-    if (storedOrders) {
-        savedOrdersList = JSON.parse(storedOrders);
-    }
-    renderCartItems();
+const storedOrders = localStorage.getItem('sandhu_orders');
+if (storedOrders) {
+    savedOrdersList = JSON.parse(storedOrders);
+}
+renderCartItems();
 
-    if (menuToggle) menuToggle.addEventListener('click', () => mainNav.classList.toggle('open'));
-    
-    document.querySelectorAll('.add-to-cart-btn-new').forEach(btn => {
-        btn.addEventListener('click', function() { animateToCart(this); });
+if (menuToggle) menuToggle.addEventListener('click', () => mainNav.classList.toggle('open'));
+
+document.querySelectorAll('.add-to-cart-btn-new').forEach(btn => {
+    btn.addEventListener('click', function() { animateToCart(this); });
+});
+
+if (cartIcon) cartIcon.addEventListener('click', (e) => { e.preventDefault(); toggleCart(); });
+if (closeCartBtn) closeCartBtn.addEventListener('click', toggleCart);
+
+cartListContainer.addEventListener('click', (e) => {
+    const action = e.target.classList.contains('plus-btn') ? 'plus' : e.target.classList.contains('minus-btn') ? 'minus' : null;
+    if (action) handleQuantityChange(parseInt(e.target.closest('.cart-item').dataset.id), action);
+});
+
+if (buyNowBtn) buyNowBtn.addEventListener('click', (e) => { e.preventDefault(); toggleView('checkout'); });
+if (backToCartLink) backToCartLink.addEventListener('click', (e) => { e.preventDefault(); toggleView('main'); toggleCart(); });
+if (returnToShopBtn) returnToShopBtn.addEventListener('click', () => toggleView('main'));
+if (yourOrdersLink) yourOrdersLink.addEventListener('click', (e) => { e.preventDefault(); toggleView('orders'); });
+if (backToShopOrdersBtn) backToShopOrdersBtn.addEventListener('click', () => toggleView('main'));
+
+if (shippingForm) shippingForm.addEventListener('submit', handleOrderSubmit);
+
+// Modal / Auth Event Listeners
+if (accountBtn) accountBtn.addEventListener('click', toggleModal);
+if (closeModalBtn) closeModalBtn.addEventListener('click', toggleModal);
+if (loginTab) loginTab.addEventListener('click', () => switchTab('login'));
+if (signupTab) signupTab.addEventListener('click', () => switchTab('signup'));
+if (loginForm) loginForm.addEventListener('submit', handleLogin);
+if (signupForm) signupForm.addEventListener('submit', handleSignup);
+if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+// Firebase Auth State Listener
+window.onAuthStateChanged(window.auth, (user) => {
+    updateAuthUI(user);
+});
+
+// --- Newsletter Functionality ---
+const newsletterForm = document.getElementById('newsletter-form');
+if (newsletterForm) {
+    newsletterForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const emailValue = document.getElementById('newsletter-email').value;
+        // This uses the showToast function already in your main.js
+        showToast(`Success! ${emailValue} is now subscribed.`);
+        newsletterForm.reset();
     });
-
-    if (cartIcon) cartIcon.addEventListener('click', (e) => { e.preventDefault(); toggleCart(); });
-    if (closeCartBtn) closeCartBtn.addEventListener('click', toggleCart);
-    
-    cartListContainer.addEventListener('click', (e) => {
-        const action = e.target.classList.contains('plus-btn') ? 'plus' : e.target.classList.contains('minus-btn') ? 'minus' : null;
-        if (action) handleQuantityChange(parseInt(e.target.closest('.cart-item').dataset.id), action);
-    });
-
-    if (buyNowBtn) buyNowBtn.addEventListener('click', (e) => { e.preventDefault(); toggleView('checkout'); });
-    if (backToCartLink) backToCartLink.addEventListener('click', (e) => { e.preventDefault(); toggleView('main'); toggleCart(); });
-    if (returnToShopBtn) returnToShopBtn.addEventListener('click', () => toggleView('main'));
-    if (yourOrdersLink) yourOrdersLink.addEventListener('click', () => toggleView('orders'));
-    if (backToShopOrdersBtn) backToShopOrdersBtn.addEventListener('click', () => toggleView('main'));
-
-    if (shippingForm) shippingForm.addEventListener('submit', handleOrderSubmit);
-});
-// 1. Select the elements
-const accountBtn = document.getElementById('accountBtn');
-const accountMenu = document.getElementById('accountMenu');
-
-// 2. Toggle the menu when clicking the button
-accountBtn.addEventListener('click', function(event) {
-    event.stopPropagation(); // Prevents the click from closing the menu immediately
-    accountMenu.classList.toggle('show-menu');
-});
-
-// 3. Close the menu if the user clicks anywhere else on the page
-document.addEventListener('click', function(event) {
-    // If the click is NOT inside the menu or on the button, close it
-    if (!accountBtn.contains(event.target)) {
-        accountMenu.classList.remove('show-menu');
-    }
-});
+}

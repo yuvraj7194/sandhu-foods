@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Track Your Order | Sandhu Foods</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <main style="padding: 60px 5%; max-width: 1200px; margin: 0 auto;">
+
+        <!-- Page Heading -->
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h1 style="font-size: 2.5em; margin-bottom: 10px;">Track Your Order</h1>
+            <a href="index.html" style="color: #B8860B; text-decoration: none; font-weight: 500;">
+                ← Back to Shop
+            </a>
+        </div>
+
+        <!-- Main Card -->
+        <div style="
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 40px;
+            max-width: 700px;
+            margin: 0 auto;
+        ">
+
+            <h3 style="color: #B8860B; margin-top: 0;">
+                Track Your Order Status
+            </h3>
+
+            <p style="margin-bottom: 20px;">
+                Enter your <strong>Order ID</strong> below to view your order details and payment status.
+            </p>
+
+            <!-- Input -->
+            <input
+                type="text"
+                id="track-order-id"
+                placeholder="Enter Order ID (e.g. SF-12345678)"
+                style="
+                    width: 100%;
+                    padding: 12px;
+                    font-size: 1em;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                    margin-bottom: 20px;
+                "
+            >
+
+            <!-- Button -->
+            <button
+                id="track-order-btn"
+                style="
+                    background: #222;
+                    color: #fff;
+                    padding: 12px 25px;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 1em;
+                    cursor: pointer;
+                "
+            >
+                Track Order
+            </button>
+
+            <!-- Result -->
+            <div
+                id="track-result"
+                style="
+                    margin-top: 30px;
+                    display: none;
+                    padding-top: 20px;
+                    border-top: 1px solid #eee;
+                "
+            >
+                <!-- JS injects order details here -->
+            </div>
+
+        </div>
+
+    </main>
+
+    <script src="track.js"></script>
+
+</body>
+</html>
